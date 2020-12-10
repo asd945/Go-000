@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	group, _ := errgroup.WithContext(context.Background())
+	group := errgroup.Group{}
 
 	server := &http.Server{Addr: ":8080", Handler: &Foo{}}
 	debug := &http.Server{Addr: ":8081", Handler: &Foo{}}
