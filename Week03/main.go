@@ -13,17 +13,24 @@ import (
 )
 
 func main() {
-	stop := make(chan struct{}, 1)
 	group, _ := errgroup.WithContext(context.Background())
 
 	server := &http.Server{Addr: ":8080", Handler: &Foo{}}
 	debug := &http.Server{Addr: ":8081", Handler: &Foo{}}
 
+	shouldStop := make(chan struct{}, 2)
+
 	group.Go(func() error {
+		defer func() {
+			shouldStop <- struct{}{}
+		}()
 		fmt.Println("start http server...")
 		return server.ListenAndServe()
 	})
 	group.Go(func() error {
+		defer func() {
+			shouldStop <- struct{}{}
+		}()
 		fmt.Println("start debug server...")
 		return debug.ListenAndServe()
 	})
@@ -32,7 +39,7 @@ func main() {
 		signalChan := make(chan os.Signal, 1)
 		signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 		select {
-		case <-stop:
+		case <-shouldStop:
 			fmt.Println("receive err")
 		case c := <-signalChan:
 			fmt.Println("receive signal: ", c)
@@ -45,8 +52,8 @@ func main() {
 	}()
 
 	if err := group.Wait(); err != nil {
-		stop <- struct{}{}
-	}
+		fmt.Println("all shutdown")
+ 	}
 
 
 }
