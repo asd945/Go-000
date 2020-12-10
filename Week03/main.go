@@ -18,34 +18,36 @@ func main() {
 	server := &http.Server{Addr: ":8080", Handler: &Foo{}}
 	debug := &http.Server{Addr: ":8081", Handler: &Foo{}}
 
-	shouldStop := make(chan struct{}, 2)
+	shouldStop := make(chan error, 2)
 
-	group.Go(func() error {
+	group.Go(func() (err error) {
 		defer func() {
-			shouldStop <- struct{}{}
+			shouldStop <- fmt.Errorf("server err, %v", err)
 		}()
 		fmt.Println("start http server...")
-		return server.ListenAndServe()
+		err = server.ListenAndServe()
+		return
 	})
-	group.Go(func() error {
+	group.Go(func() (err error) {
 		defer func() {
-			shouldStop <- struct{}{}
+			shouldStop <- fmt.Errorf("debug server err, %v", err)
 		}()
 		fmt.Println("start debug server...")
-		return debug.ListenAndServe()
+		err = debug.ListenAndServe()
+		return
 	})
 
 	go func() {
 		signalChan := make(chan os.Signal, 1)
 		signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
+
 		select {
-		case <-shouldStop:
-			fmt.Println("receive err")
+		case err := <-shouldStop:
+			fmt.Println("receive err:", err)
 		case c := <-signalChan:
 			fmt.Println("receive signal: ", c)
 		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = server.Shutdown(ctx)
 		_ = debug.Shutdown(ctx)
@@ -53,8 +55,7 @@ func main() {
 
 	if err := group.Wait(); err != nil {
 		fmt.Println("all shutdown")
- 	}
-
+	}
 
 }
 
